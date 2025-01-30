@@ -1,0 +1,87 @@
+library(shiny)
+
+# Define target concentrations for each cell line
+target_concentrations <- list(
+  "22Rv1" = 5e4, "C4-2" = 5e4, "LNCaP" = 5e4,
+  "DU145" = 1e4, "PC3" = 1e4, "PNT2" = 1e4,
+  "VCaP" = 1e5
+)
+
+# UI
+ui <- fluidPage(
+  titlePanel("Cell Dilution Calculator"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("cell_line", "Select Cell Line:", choices = names(target_concentrations)),
+      numericInput("current_conc", "Current Concentration (cells/ml):", value = 564000, min = 0),
+      numericInput("final_total_vol", "Final Total Volume (ml):", value = 50, min = 0),
+      actionButton("calculate", "Calculate Dilution"),
+      hr(),
+      actionButton("show_code", "View Source Code"),
+      verbatimTextOutput("source_code")
+    ),
+    mainPanel(
+      h3("Results:"),
+      verbatimTextOutput("result"),
+      h3("Step-wise Calculation:"),
+      uiOutput("math_formula"),
+      hr(),
+      p("Developed by Shan Ding, Imperial College London."),
+      p("For inquiries, visit: ",
+        a("Shan Ding's Profile", href = "https://www.imperial.ac.uk/", target = "_blank"))
+    )
+  )
+)
+
+# Server
+server <- function(input, output, session) {
+  
+  observeEvent(input$calculate, {
+    req(input$cell_line, input$current_conc, input$final_total_vol)
+    
+    target_conc <- target_concentrations[[input$cell_line]]
+
+    if (is.na(input$current_conc) || input$current_conc <= 0) {
+      output$result <- renderText("Error: Please enter a valid current concentration greater than zero.")
+      output$math_formula <- renderUI(NULL)
+      return()
+    }
+
+    if (input$current_conc > target_conc) {
+      dilution_factor <- input$current_conc / target_conc
+      required_initial_volume <- input$final_total_vol / dilution_factor
+      required_medium <- input$final_total_vol - required_initial_volume
+
+      output$result <- renderText(
+        paste0("Dilution required.\n",
+               "Take ", round(required_initial_volume, 3), " ml from original suspension.\n",
+               "Add ", round(required_medium, 3), " ml of medium to reach ", input$final_total_vol, " ml total volume.")
+      )
+
+      output$math_formula <- renderUI({
+        withMathJax(
+          helpText(
+            paste0(
+              "$$ \\text{Dilution Factor} = \\frac{C_{current}}{C_{target}} = \\frac{", input$current_conc, "}{", target_conc, "} = ", round(dilution_factor, 3), " $$",
+              "$$ V_{needed} = \\frac{V_{final}}{\\text{Dilution Factor}} = \\frac{", input$final_total_vol, "}{", round(dilution_factor, 3), "} = ", round(required_initial_volume, 3), " \\text{ ml} $$",
+              "$$ V_{medium} = V_{final} - V_{needed} = ", input$final_total_vol, " - ", round(required_initial_volume, 3), " = ", round(required_medium, 3), " \\text{ ml} $$"
+            )
+          )
+        )
+      })
+    } else {
+      output$result <- renderText("No dilution needed. Already at target concentration.")
+      output$math_formula <- renderUI(NULL)
+    }
+  })
+  
+  # Show Source Code when button is clicked
+  observeEvent(input$show_code, {
+    output$source_code <- renderText({
+      "You can find the source code at: https://github.com/your-repository/shiny-dilution-app"
+    })
+  })
+}
+
+# Run the application 
+shinyApp(ui = ui, server = server)
